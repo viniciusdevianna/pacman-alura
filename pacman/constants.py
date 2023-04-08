@@ -22,3 +22,12 @@ SCREEN_Y = 600
 # Sizes
 RADIUS = 30
 SIZE = min(SCREEN_X, SCREEN_Y) // 30
+
+# STATES
+PLAYING = 0
+PAUSED = 1
+GAME_OVER = 2
+
+# Messages
+TEXT_PAUSED = 'P A U S E'
+TEXT_GAME_OVER = 'G A M E  O V E R'

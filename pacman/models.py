@@ -32,6 +32,7 @@ class Movable(metaclass=ABCMeta):
 
 class Background(GameEntity):
     def __init__(self, size, font, pacman) -> None:
+        self.state = cte.PLAYING
         self.pacman = pacman
         self.movables = [pacman,]
         self.size = size
@@ -73,9 +74,17 @@ class Background(GameEntity):
         self.movables.append(movable)
 
     def draw(self, surface):
-        for i, row in enumerate(self.matrix):
-            self._draw_column(surface, i, row)
-        self._draw_score(surface)
+        match self.state:
+            case cte.PLAYING:
+                self._draw_playing(surface)
+            case cte.PAUSED:
+                self._draw_playing(surface)
+                self._draw_paused(surface)
+            case cte.GAME_OVER:
+                self._draw_playing(surface)
+                self._draw_game_over(surface)
+            case _:
+                pass
 
     def _draw_column(self, surface, row_number, row):
         for j, column in enumerate(row):
@@ -91,13 +100,45 @@ class Background(GameEntity):
         img_score = self.font.render(f'Score: {self.score}', True, cte.YELLOW)
         surface.blit(img_score, (score_x, 50))
 
+    def _draw_playing(self, surface):
+        for i, row in enumerate(self.matrix):
+            self._draw_column(surface, i, row)
+        self._draw_score(surface)
+
+    def _draw_text_center(self, surface, text):
+        text_img = self.font.render(text, True, cte.YELLOW)
+        text_x = (surface.get_width() - text_img.get_width()) // 2
+        text_y = (surface.get_height() - text_img.get_height()) // 2
+
+        surface.blit(text_img, (text_x, text_y))
+
+    def _draw_paused(self, surface):
+        self._draw_text_center(surface, cte.TEXT_PAUSED)
+
+    def _draw_game_over(self, surface):
+        self._draw_text_center(surface, cte.TEXT_GAME_OVER)
+
     def calculate_rules(self):
+        match self.state:
+            case cte.PLAYING:
+                self._calculate_rules_playing()
+            case cte.PAUSED:
+                self._calculate_rules_paused()
+            case _:
+                pass         
+
+    def _calculate_rules_playing(self):
         for movable in self.movables:
             row_intent = int(movable.row_intent)
             col_intent = int(movable.column_intent)
             row = int(movable.row)
             col = int(movable.column)
             directions = self._get_directions(row, col)
+
+            if self._pacman_collided_with_enemy(movable):
+                self.state = cte.GAME_OVER
+                self.pacman.state = cte.GAME_OVER
+                movable.state = cte.GAME_OVER
 
             if len(directions) >= 3:
                 movable.turn_around_corner(directions)
@@ -110,10 +151,19 @@ class Background(GameEntity):
             else:
                 movable.movement_hindered(directions)
 
+    def _calculate_rules_paused(self):
+        pass
+
     def process_events(self, events):
         for e in events:
             if e.type == QUIT:
                 exit()
+            if e.type == KEYDOWN:
+                if e.key == K_p:
+                    if self.state == 0:
+                        self.state = 1
+                    else:
+                        self.state = 0
 
     def _get_directions(self, row, column):
         directions = []
@@ -131,9 +181,13 @@ class Background(GameEntity):
     
     def _is_free_space(self, row, column):
         return 0 <= column < 28 and 0 <= row < 29 and self.matrix[row][column] != 2
+    
+    def _pacman_collided_with_enemy(self, movable):
+        return isinstance(movable, Enemy) and movable.row == self.pacman.row and movable.column == self.pacman.column
 
 class Pacman(GameEntity, Movable):
     def __init__(self, size) -> None:
+        self.state = cte.PLAYING
         self.column = 1
         self.row = 1
         self.center_x = 400
@@ -164,11 +218,23 @@ class Pacman(GameEntity, Movable):
 
         draw.circle(surface, cte.BLACK, (eye_x, eye_y), eye_radius, 0)
 
-    def calculate_rules(self):
+    def calculate_rules(self) -> None:
+        match self.state:
+            case cte.PLAYING:
+                self._calculate_rules_playing()
+            case cte.PAUSED:
+                self._calculate_rules_paused()
+            case _:
+                pass
+
+    def _calculate_rules_playing(self):
         self.column_intent += self.vel_x
         self.row_intent += self.vel_y
         self.center_x = int(self.column * self.size + self.radius)
         self.center_y = int(self.row * self.size + self.radius)
+    
+    def _calculate_rules_paused(self):
+        pass
 
     def movement_allowed(self):
         self.column = self.column_intent
@@ -204,6 +270,7 @@ class Pacman(GameEntity, Movable):
 
 class Enemy(GameEntity, Movable):
     def __init__(self, color, size) -> None:
+        self.state = cte.PLAYING
         self.column = 6
         self.row = 2
         self.color = color
@@ -242,8 +309,16 @@ class Enemy(GameEntity, Movable):
         draw.circle(surface, cte.WHITE, (right_eye_x, right_eye_y), eye_external_radius, 0)
         draw.circle(surface, cte.BLACK, (right_eye_x, right_eye_y), eye_internal_radius, 0)
         
+    def calculate_rules(self) -> None:
+        match self.state:
+            case cte.PLAYING:
+                self._calculate_rules_playing()
+            case cte.PAUSED:
+                self._calculate_rules_paused()
+            case _:
+                pass
 
-    def calculate_rules(self):
+    def _calculate_rules_playing(self):
         match self.direction:
             case cte.UP:
                 self.row_intent -= self.vel
@@ -255,6 +330,9 @@ class Enemy(GameEntity, Movable):
                 self.column_intent -= self.vel
             case _:
                 raise ValueError('Unsupported direction value')
+            
+    def _calculate_rules_paused(self):
+        pass
 
     def process_events(self, events):
         pass
