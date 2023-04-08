@@ -17,10 +17,23 @@ class GameEntity(metaclass=ABCMeta):
     def process_events(self, events) -> None:
         pass
 
+class Movable(metaclass=ABCMeta):
+    @abstractmethod
+    def movement_allowed(self):
+        pass
+
+    @abstractmethod
+    def movement_hindered(self):
+        pass
+
+    @abstractmethod
+    def turn_around_corner(self):
+        pass
+
 class Background(GameEntity):
-    def __init__(self, size, font, pacman, enemy) -> None:
+    def __init__(self, size, font, pacman) -> None:
         self.pacman = pacman
-        self.enemy = enemy
+        self.movables = [pacman,]
         self.size = size
         self.font = font
         self.score = 0
@@ -56,16 +69,13 @@ class Background(GameEntity):
             [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
         ]
 
-    def draw_score(self, surface):
-        score_x = 30 * self.size
-        img_score = self.font.render(f'Score: {self.score}', True, cte.YELLOW)
-        surface.blit(img_score, (score_x, 50))
-
+    def add_movable(self, movable):
+        self.movables.append(movable)
 
     def draw(self, surface):
         for i, row in enumerate(self.matrix):
             self._draw_column(surface, i, row)
-        self.draw_score(surface)
+        self._draw_score(surface)
 
     def _draw_column(self, surface, row_number, row):
         for j, column in enumerate(row):
@@ -76,31 +86,36 @@ class Background(GameEntity):
             if column == 1:
                 draw.circle(surface, cte.YELLOW, (rect_x + self.size // 2, rect_y + self.size // 2), self.size // 10, 0)
 
-    def calculate_rules(self):
-        directions = self.get_directions(self.enemy.row, self.enemy.column)
-        if len(directions) >= 3:
-            self.enemy.corner(directions)
-        
-        column = self.pacman.column_intent
-        row = self.pacman.row_intent
+    def _draw_score(self, surface):
+        score_x = 30 * self.size
+        img_score = self.font.render(f'Score: {self.score}', True, cte.YELLOW)
+        surface.blit(img_score, (score_x, 50))
 
-        if 0 <= column < 28 and 0 <= row < 29:
-            if self.matrix[row][column] != 2:
-                self.pacman.movement_allowed()
-                if self.matrix[row][column] == 1:
+    def calculate_rules(self):
+        for movable in self.movables:
+            row_intent = int(movable.row_intent)
+            col_intent = int(movable.column_intent)
+            row = int(movable.row)
+            col = int(movable.column)
+            directions = self._get_directions(row, col)
+
+            if len(directions) >= 3:
+                movable.turn_around_corner(directions)
+
+            if self._is_free_space(row_intent, col_intent):
+                movable.movement_allowed()
+                if isinstance(movable, Pacman) and self.matrix[row][col] == 1:
                     self.score += 1
-                    self.matrix[row][column] = 0
+                    self.matrix[row][col] = 0
             else:
-                self.pacman.movement_hindered()
-        else:
-            self.pacman.movement_hindered()
+                movable.movement_hindered(directions)
 
     def process_events(self, events):
         for e in events:
             if e.type == QUIT:
                 exit()
 
-    def get_directions(self, row, column):
+    def _get_directions(self, row, column):
         directions = []
 
         if self.matrix[int(row - 1)][int(column)] != 2:
@@ -113,8 +128,11 @@ class Background(GameEntity):
             directions.append(cte.RIGHT)
        
         return directions
+    
+    def _is_free_space(self, row, column):
+        return 0 <= column < 28 and 0 <= row < 29 and self.matrix[row][column] != 2
 
-class Pacman(GameEntity):
+class Pacman(GameEntity, Movable):
     def __init__(self, size) -> None:
         self.column = 1
         self.row = 1
@@ -156,9 +174,12 @@ class Pacman(GameEntity):
         self.column = self.column_intent
         self.row = self.row_intent
 
-    def movement_hindered(self):
+    def movement_hindered(self, directions):
         self.column_intent -= self.vel_x
         self.row_intent -= self.vel_y
+
+    def turn_around_corner(self, directions):
+        return super().turn_around_corner()
 
     def process_events(self, events):
         for e in events:
@@ -181,7 +202,7 @@ class Pacman(GameEntity):
                 if e.key == K_DOWN:
                     self.vel_y = 0
 
-class Enemy(GameEntity):
+class Enemy(GameEntity, Movable):
     def __init__(self, color, size) -> None:
         self.column = 6
         self.row = 2
@@ -189,6 +210,8 @@ class Enemy(GameEntity):
         self.size = size
         self.vel = cte.SPEED
         self.direction = cte.DOWN
+        self.column_intent = self.column
+        self.row_intent = self.row
 
     def draw(self, surface):
         slice = self.size // 8
@@ -223,16 +246,30 @@ class Enemy(GameEntity):
     def calculate_rules(self):
         match self.direction:
             case cte.UP:
-                self.row -= self.vel
+                self.row_intent -= self.vel
             case cte.RIGHT: 
-                self.column += self.vel
+                self.column_intent += self.vel
             case cte.DOWN:
-                self.row += self.vel
+                self.row_intent += self.vel
             case cte.LEFT:
-                self.column -= self.vel
+                self.column_intent -= self.vel
+            case _:
+                raise ValueError('Unsupported direction value')
 
     def process_events(self, events):
         pass
 
-    def corner(self, directions):
+    def change_directions(self, directions):
         self.direction = random.choice(directions)
+
+    def turn_around_corner(self, directions):
+        self.change_directions(directions)
+
+    def movement_allowed(self):
+        self.column = self.column_intent
+        self.row = self.row_intent
+
+    def movement_hindered(self, directions):
+        self.column_intent = self.column
+        self.row_intent = self.row
+        self.change_directions(directions)
