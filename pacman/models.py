@@ -38,6 +38,7 @@ class Background(GameEntity):
         self.size = size
         self.font = font
         self.score = 0
+        self.lives = 3
         self.matrix = [
             [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
             [2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
@@ -101,7 +102,9 @@ class Background(GameEntity):
     def _draw_score(self, surface):
         score_x = 30 * self.size
         img_score = self.font.render(f'Score: {self.score}', True, cte.YELLOW)
+        img_lives = self.font.render(f'Vidas: {self.lives}', True, cte.YELLOW)
         surface.blit(img_score, (score_x, 50))
+        surface.blit(img_lives, (score_x, 100))
 
     def _draw_playing(self, surface):
         for i, row in enumerate(self.matrix):
@@ -142,7 +145,15 @@ class Background(GameEntity):
             directions = self._get_directions(row, col)
 
             if self._pacman_collided_with_enemy(movable):
-                self.state = cte.GAME_OVER
+                self.lives -= 1
+                if self.lives <= 0:
+                    self.state = cte.GAME_OVER
+                    self.pacman.state = cte.GAME_OVER
+                else:
+                    self.pacman.row = 1
+                    self.pacman.column = 1
+                    self.pacman.row_intent = 1
+                    self.pacman.column_intent = 1
 
             if len(directions) >= 3:
                 movable.turn_around_corner(directions)
@@ -154,6 +165,7 @@ class Background(GameEntity):
                     self.matrix[row][col] = 0
                     if self.score >= 306:
                         self.state = cte.VICTORY
+                        self.pacman.state = cte.VICTORY
             else:
                 movable.movement_hindered(directions)
 
@@ -168,8 +180,12 @@ class Background(GameEntity):
                 if e.key == K_p:
                     if self.state == 0:
                         self.state = 1
+                        for movable in self.movables:
+                            movable.state = 1
                     else:
                         self.state = 0
+                        for movable in self.movables:
+                            movable.state = 0
 
     def _get_directions(self, row, column):
         directions = []
@@ -212,11 +228,12 @@ class Pacman(GameEntity, Movable):
         draw.circle(surface, cte.YELLOW, (self.center_x, self.center_y), self.radius)
 
         # Drawing pacman mouth
-        self.mouth_opening += self.mouth_vel
-        if self.mouth_opening > self.radius:
-            self.mouth_vel = -2 * cte.SPEED
-        if self.mouth_opening <= 0:
-            self.mouth_vel = 2 * cte.SPEED
+        if self.state == 0:
+            self.mouth_opening += self.mouth_vel
+            if self.mouth_opening > self.radius:
+                self.mouth_vel = -2 * cte.SPEED
+            if self.mouth_opening <= 0:
+                self.mouth_vel = 2 * cte.SPEED
 
         mouth_corner = (self.center_x, self.center_y)
         sup_lip = (self.center_x + self.radius, self.center_y - self.mouth_opening)
