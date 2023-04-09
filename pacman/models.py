@@ -83,6 +83,9 @@ class Background(GameEntity):
             case cte.GAME_OVER:
                 self._draw_playing(surface)
                 self._draw_game_over(surface)
+            case cte.VICTORY:
+                self._draw_playing(surface)
+                self._draw_victory(surface)
             case _:
                 pass
 
@@ -118,6 +121,9 @@ class Background(GameEntity):
     def _draw_game_over(self, surface):
         self._draw_text_center(surface, cte.TEXT_GAME_OVER)
 
+    def _draw_victory(self, surface):
+        self._draw_text_center(surface, cte.TEXT_VICTORY)
+
     def calculate_rules(self):
         match self.state:
             case cte.PLAYING:
@@ -137,8 +143,6 @@ class Background(GameEntity):
 
             if self._pacman_collided_with_enemy(movable):
                 self.state = cte.GAME_OVER
-                self.pacman.state = cte.GAME_OVER
-                movable.state = cte.GAME_OVER
 
             if len(directions) >= 3:
                 movable.turn_around_corner(directions)
@@ -148,6 +152,8 @@ class Background(GameEntity):
                 if isinstance(movable, Pacman) and self.matrix[row][col] == 1:
                     self.score += 1
                     self.matrix[row][col] = 0
+                    if self.score >= 306:
+                        self.state = cte.VICTORY
             else:
                 movable.movement_hindered(directions)
 
@@ -198,15 +204,23 @@ class Pacman(GameEntity, Movable):
         self.vel_y = 0
         self.column_intent = self.column
         self.row_intent = self.row
+        self.mouth_opening = 0
+        self.mouth_vel = 2 * cte.SPEED
 
     def draw(self, surface):
         # Drawing pacman body
         draw.circle(surface, cte.YELLOW, (self.center_x, self.center_y), self.radius)
 
         # Drawing pacman mouth
+        self.mouth_opening += self.mouth_vel
+        if self.mouth_opening > self.radius:
+            self.mouth_vel = -2 * cte.SPEED
+        if self.mouth_opening <= 0:
+            self.mouth_vel = 2 * cte.SPEED
+
         mouth_corner = (self.center_x, self.center_y)
-        sup_lip = (self.center_x + self.radius, self.center_y - self.radius)
-        inf_lip = (self.center_x + self.radius, self.center_y)
+        sup_lip = (self.center_x + self.radius, self.center_y - self.mouth_opening)
+        inf_lip = (self.center_x + self.radius, self.center_y + self.mouth_opening)
         points = [mouth_corner, sup_lip, inf_lip]
 
         draw.polygon(surface, cte.BLACK, points, 0)
@@ -245,7 +259,7 @@ class Pacman(GameEntity, Movable):
         self.row_intent -= self.vel_y
 
     def turn_around_corner(self, directions):
-        return super().turn_around_corner()
+        pass
 
     def process_events(self, events):
         for e in events:
@@ -271,8 +285,8 @@ class Pacman(GameEntity, Movable):
 class Enemy(GameEntity, Movable):
     def __init__(self, color, size) -> None:
         self.state = cte.PLAYING
-        self.column = 6
-        self.row = 2
+        self.column = 13
+        self.row = 15
         self.color = color
         self.size = size
         self.vel = cte.SPEED

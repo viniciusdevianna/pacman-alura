@@ -25,9 +25,9 @@ if __name__ == '__main__':
     while True:
         # Rules
         pacman.calculate_rules()
-        background.calculate_rules()
         for enemy in enemies:
             enemy.calculate_rules()
+        background.calculate_rules()
         
         # Draw
         screen.fill(cte.BLACK)
